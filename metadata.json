@@ -3,9 +3,15 @@
   "checkpoint_id": "01M1TSBRH729JFQNABR0W17022",
   "strategy": "manual-commit",
   "branch": "feat/sandbox-telemetry-traps",
-  "checkpoints_count": 3,
+  "checkpoints_count": 8,
   "files_touched": [
-    "TESTING_SANDBOX/tests/test_cache.py"
+    "TESTING_SANDBOX/README.md",
+    "TESTING_SANDBOX/cache_worker.py",
+    "TESTING_SANDBOX/config.py",
+    "TESTING_SANDBOX/order_service.py",
+    "TESTING_SANDBOX/redis.py",
+    "TESTING_SANDBOX/tests/test_cache.py",
+    "TESTING_SANDBOX/tests/test_order_pipeline.py"
   ],
   "sessions": [
     {
@@ -14,13 +20,20 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 28444,
+    "input_tokens": 149873,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 196864,
-    "output_tokens": 7080,
-    "api_call_count": 13
+    "cache_read_tokens": 1831168,
+    "output_tokens": 31224,
+    "api_call_count": 52
   }
 }
