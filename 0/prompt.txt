@@ -1,0 +1,58 @@
+Perform an implementation audit against our planned MVP architecture and CLI logging behavior:
+
+1. Gap Analysis:
+   - Compare `resurrect/` against our target pipeline:
+     * CLI Commands: `resurrect init`, `resurrect doctor`, `resurrect run`, and `resurrect inspect-checkpoint`.
+     * Watcher & Subprocess Interceptor: Does `resurrect/watcher.py` or `cli.py run` implement live process wrapping, loop detection (>=3 failures), process killing (SIGTERM/kill), and Databricks remediation injection?
+     * Entire Checkpoint Polling: Does `parser.py` read live refs from `refs/entire/checkpoints/` via Git commands when running an active session?
+     * Privacy Boundary: Confirm prompt scrubbing, token masking, and `[COMPLETE CONTEXT]` vs. `[PARTIAL / REDACTED CONTEXT]` badges operate across all UI entry points.
+
+2. Logging & Diagnostics Check:
+   - Inspect all CLI commands and verify that every step logs clear, user-friendly Rich console output:
+     * When config is missing, does `init` print explicit instructions on which fields to populate in `.resurrect/config.json`?
+     * Does `doctor` handle all network timeouts and edge cases cleanly with helpful remediation steps?
+     * Does `run` log live polling tickers (tokens intercepted, failures detected) and render a distinct Rich Panel when the breaker trips?
+
+3. Test Coverage:
+   - Run `pytest -q` to confirm the status of existing tests.
+   - Summarize what is fully implemented, what is partially implemented, and what remains to be built for the live `resurrect run` demo.
+
+---
+
+Implement the missing live loop-breaker watcher and CLI runner commands:
+
+1. Create `resurrect/watcher.py`:
+   - Implement `watch_agent(command: list[str], max_failures: int = 3, poll_interval: float = 2.0)`:
+     - Launch the command as a subprocess using `subprocess.Popen(..., stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)`.
+     - Live-stream and print the child output so the user sees agent progress.
+     - Periodically poll active checkpoint telemetry:
+       * First attempt: resolve latest git ref via `git for-each-ref --sort=-committerdate --format="%(refname)" refs/entire/checkpoints/` and read `0/full.jsonl` using `git show <ref>:0/full.jsonl`.
+       * Fallback: check local `.entire/` directory or recent checkpoint files.
+     - Parse telemetry through `resurrect.parser.parse_telemetry`:
+       * Extract consecutive failures, tokens burned, and sanitized error signatures (maintaining Track 1 privacy scrubbing).
+     - When consecutive failures >= max_failures:
+       * Terminate and kill the child process (SIGTERM, then kill if alive).
+       * Query Databricks for the proven fix via `DatabricksClient.fetch_resolution()`.
+       * Generate `.resurrect/handoff_manifest.json` with context status badges.
+       * Render the rich breaker trip panel and exit cleanly.
+
+2. In `resurrect/ui/console.py`:
+   - Add a Rich panel for the tripped breaker:
+     * Red bold border: "🚨 [CIRCUIT BREAKER TRIPPED]: Infinite Repair Loop Detected!"
+     * Display: Tokens intercepted, estimated dollars saved, sanitized signature.
+     * Render Context Badge: [COMPLETE CONTEXT] or [PARTIAL / REDACTED CONTEXT].
+     * Green panel: Databricks lakehouse resolution and source commit.
+
+3. In `resurrect/cli.py`:
+   - Add command `resurrect run <command_str>`:
+     - Example: `resurrect run "pytest tests/test_redis_worker.py"` or `resurrect run "codex 'fix tests'"`
+     - Calls `watcher.watch_agent()` with live terminal reporting.
+   - Add command `resurrect inspect-checkpoint`:
+     - Reads and prints telemetry metadata, token count, and privacy status from the most recent checkpoint.
+   - Improve `resurrect init` output: clearly print that `.resurrect/config.json` was created and list the required Databricks keys.
+
+4. Version and Tests:
+   - Bump version to `0.1.2` in `pyproject.toml` and `resurrect/__init__.py`.
+   - Add tests in `tests/test_watcher.py` verifying subprocess termination and handoff file creation when a mock command fails 3 times.
+
+Run `pytest -q` to ensure all tests pass.
