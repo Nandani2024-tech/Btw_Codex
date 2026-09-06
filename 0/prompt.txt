@@ -1,0 +1,24 @@
+Fix exports and method signatures in `resurrect/` to support the end-to-end test suite:
+
+1. In `resurrect/parser.py`:
+   - Define and export `sanitize_error_signature(raw_trace: str) -> str`:
+     - Strip Windows and Unix absolute file paths (e.g. C:\... or /home/...).
+     - Strip tokens/credentials matching patterns like `dapi[a-zA-Z0-9]+` or `Bearer\s+[a-zA-Z0-9._-]+`.
+     - Extract the primary exception line (e.g. regex search for `r"([A-Z]\w*(?:Error|Exception)[^\n]*)"`).
+     - Return the matched exception line stripped, or fallback to the last non-empty line.
+
+2. In `resurrect/core/databricks_client.py`:
+   - Ensure `DatabricksClient` has the method:
+     `fetch_resolution(self, error_signature: str, module_name: str | None = None) -> dict`
+   - It should query the Delta Lake table using the SQL Statement API.
+   - Return a dictionary with keys: `resolution`, `commit`, and `confidence` (e.g. "verified" or "heuristic").
+   - Include an offline fallback if the network fails so tests never crash unhandled.
+
+3. In `resurrect/handoff.py`:
+   - Ensure `generate_handoff_manifest(session_data: dict, remediation: dict, filepath="handoff_manifest.json") -> str` accepts these arguments, writes the JSON file, and returns the filepath string.
+
+4. In `resurrect/__init__.py`:
+   - Bump version to `0.1.1` and export `sanitize_error_signature`, `DatabricksClient`, and `generate_handoff_manifest`.
+   - Update version to `0.1.1` in `pyproject.toml`.
+
+Run `pytest -q` to verify all tests pass.
