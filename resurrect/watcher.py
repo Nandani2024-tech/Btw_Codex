@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -113,14 +115,49 @@ def _estimate_tokens(texts: Iterable[str]) -> int:
     return max(1, total_chars // 4) if total_chars else 0
 
 
-def watch_agent(command: list[str], max_failures: int = 3, poll_interval: float = 2.0) -> WatchResult:
+def _normalize_command(command: list[str] | str) -> list[str] | str:
+    if isinstance(command, str):
+        return command
+    if not command:
+        return command
+    if os.name == "nt":
+        resolved = shutil.which(command[0])
+        if resolved:
+            return [resolved, *command[1:]]
+    return command
+
+
+def watch_agent(command: list[str] | str, max_failures: int = 3, poll_interval: float = 2.0) -> WatchResult:
     cwd = Path.cwd()
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
+    normalized = _normalize_command(command)
+    popen_kwargs: dict[str, object] = {
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
+    if isinstance(normalized, str):
+        popen_kwargs["shell"] = True
+    elif os.name == "nt":
+        popen_kwargs["shell"] = True
+
+    try:
+        process = subprocess.Popen(normalized, **popen_kwargs)
+    except FileNotFoundError:
+        missing = command[0] if isinstance(command, list) and command else str(command).split()[0]
+        print(
+            f"[bold red]Command not found:[/bold red] {missing}. "
+            "Please verify the tool is installed and available in your PATH."
+        )
+        return WatchResult(
+            ok=False,
+            failures=0,
+            tokens_intercepted=0,
+            telemetry=ParsedTelemetry(),
+            resolution={"resolution": "", "commit": None, "confidence": "heuristic"},
+            status_line="command-not-found",
+        )
 
     failures = 0
     tokens_intercepted = 0

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import shlex
 
 import typer
@@ -88,7 +89,7 @@ def run(
     command_str: str,
     cwd: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, dir_okay=True, resolve_path=True),
 ) -> None:
-    command = shlex.split(command_str)
+    command = command_str if os.name == "nt" else shlex.split(command_str, posix=True)
     if not command:
         raise typer.Exit(code=2)
     typer.echo(f"Running: {command_str}")
