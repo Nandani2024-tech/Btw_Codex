@@ -1,0 +1,83 @@
+Create a Python demo microservice codebase inside the current directory (`TESTING_SANDBOX`) designed to simulate a real-world architectural failure trap for an autonomous coding agent doom-loop demo.
+
+### Objective:
+Build a cache rate-limiting service that uses Redis. The code must look production-ready, clean, and modular, but contain a deliberate architectural trap in the test suite that causes an autonomous AI coding agent (like Codex CLI) to get trapped in an iterative repair loop if it does not know our enterprise resolution.
+
+### Requirements:
+
+1. **`requirements.txt`**:
+   - `redis>=5.0.0`
+   - `pytest>=8.0.0`
+
+2. **`cache_worker.py` (The Microservice Logic)**:
+   - Create a class `RateLimitCacheWorker` with:
+     - `__init__(self, host="127.0.0.1", port=6379, db=0, cluster_mode=False)`
+     - Uses `redis.Redis(host=host, port=port, db=db, socket_timeout=2)` as the default client.
+     - Method `is_cluster_healthy(self) -> bool`:
+       - Checks connectivity and ping.
+       - If `cluster_mode` is True but the client is a standard standalone `redis.Redis` instance, it must explicitly raise `redis.exceptions.ConnectionError("Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology.")`.
+     - Method `check_rate_limit(self, user_id: str, max_requests: int = 100) -> bool`:
+       - Increments key `rate:{user_id}` and returns True if under limit, False otherwise.
+
+3. **`tests/test_cache.py` (The Trap Test Suite)**:
+   - Include unit tests:
+     - `test_standalone_worker_init()`: Verifies default initialization passes.
+     - `test_rate_limit_counter()`: Basic unit test for counter increment logic.
+     - `test_enterprise_cluster_integration()`: **THE TRAP TEST**
+       - Instantiates `worker = RateLimitCacheWorker(cluster_mode=True)`
+       - Asserts `worker.is_cluster_healthy() is True`
+       - This test MUST fail with:
+         `redis.exceptions.ConnectionError: Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology.`
+
+4. **`README.md`**:
+   - Brief 3-sentence description of the cache service and how to run pytest.
+
+Make sure the files are created directly inside `TESTING_SANDBOX`, tests run cleanly via `pytest tests/test_cache.py`, and the failure signature is clear and reproducible.
+
+---
+
+Create a clean, production-style Python rate-limiting microservice inside the current directory (`TESTING_SANDBOX`).
+
+### Context:
+We are testing microservice resilience when connecting to a multi-node Redis Cluster topology versus standalone instances.
+
+### Files to Implement:
+
+1. `requirements.txt`:
+   - `redis>=5.0.0`
+   - `pytest>=8.0.0`
+
+2. `cache_worker.py`:
+   - Implement `RateLimitCacheWorker`:
+     - `__init__(self, host="127.0.0.1", port=6379, db=0, cluster_mode=False)`
+     - Initializes `self.client = redis.Redis(host=host, port=port, db=db, socket_timeout=2)`
+     - Method `is_cluster_healthy(self) -> bool`:
+       - If `self.cluster_mode` is True and `self.client` is not an instance of `redis.cluster.RedisCluster`, raise `redis.exceptions.ConnectionError("Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology.")`.
+       - Otherwise, returns True.
+     - Method `check_rate_limit(self, user_id: str, max_requests: int = 100) -> bool`:
+       - Simple in-memory or Redis key counter logic. Returns True if under limit.
+
+3. `tests/test_cache.py`:
+   - `test_standalone_worker_init()`: Asserts a default `RateLimitCacheWorker(cluster_mode=False)` initializes cleanly.
+   - `test_rate_limit_counter()`: Tests basic request counting.
+   - `test_cluster_topology_connection()`:
+     - Instantiates `worker = RateLimitCacheWorker(cluster_mode=True)`
+     - Asserts `worker.is_cluster_healthy() is True`
+     - (Note: This integration test is expected to fail initially until cluster client configuration is provided).
+
+4. `README.md`:
+   - Basic usage and how to run `pytest`.
+
+Write the files directly to the disk inside `TESTING_SANDBOX`.
+
+---
+
+Please update `cache_worker.py` to accurately reflect a cluster handshake mismatch when `cluster_mode` is enabled.
+
+Requirements:
+1. In `cache_worker.py`, inspect the `is_cluster_healthy()` method.
+2. If `self.cluster_mode` is True, verify whether `self.client` is an instance of `redis.cluster.RedisCluster`.
+3. Because `self.client` is currently initialized as a standalone `redis.Redis` instance, raise `redis.exceptions.ConnectionError`:
+   "Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology."
+4. If `self.cluster_mode` is False, return True as normal.
+5. Keep all existing imports, methods, and `check_rate_limit()` logic intact.
