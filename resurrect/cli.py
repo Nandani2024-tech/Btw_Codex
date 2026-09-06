@@ -10,6 +10,8 @@ from rich.text import Text
 from resurrect.config import ResurrectConfig
 from resurrect.core.databricks_client import DatabricksClient
 from resurrect.core.entire_bridge import CommandResult, check_entire_status, setup_entire
+from resurrect.handoff import build_handoff_manifest, write_handoff_manifest
+from resurrect.parser import ParsedTelemetry, parse_telemetry
 from resurrect.ui.console import StatusItem, render_status_board
 
 
@@ -62,7 +64,15 @@ def doctor(
     table = client.verify_table_exists(config.delta_table_name)
     items.append(StatusItem("Delta table", table.ok, table.error or f"{config.delta_table_name} is queryable"))
 
+    telemetry = parse_telemetry(cwd / "refs" / "entire" / "checkpoints")
+    query_result = client.query_failure_traps(telemetry, config.delta_table_name)
+    context_label = "[PARTIAL / REDACTED CONTEXT]" if not telemetry.status.is_complete else "[COMPLETE CONTEXT]"
+    items.append(StatusItem("Failure traps", query_result.ok, query_result.error or telemetry.error_signature, context_label=context_label))
+
     render_status_board(items)
+    manifest_dir = cwd / ".resurrect"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    write_handoff_manifest(manifest_dir / "handoff_manifest.json", telemetry, verified_match=query_result.ok and telemetry.status.is_complete)
     if not all(item.ok for item in items):
         raise typer.Exit(code=1)
 
