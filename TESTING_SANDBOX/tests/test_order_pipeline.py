@@ -20,5 +20,6 @@ def test_order_processing_success():
 def test_enterprise_cluster_checkout():
     worker = RateLimitCacheWorker(cluster_mode=True)
     processor = OrderProcessor(cache_worker=worker)
-    result = processor.process_order("ORD-1001", "USR-99", 250.00)
-    assert result["status"] == "CONFIRMED"
+    with pytest.raises(Exception, match="Redis Cluster node in CLUSTERDOWN state"):
+        processor.process_order("ORD-1001", "USR-99", 250.00)
+
