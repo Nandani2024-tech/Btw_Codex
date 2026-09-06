@@ -1,0 +1,176 @@
+Perform an implementation audit against our planned MVP architecture and CLI logging behavior:
+
+1. Gap Analysis:
+   - Compare `resurrect/` against our target pipeline:
+     * CLI Commands: `resurrect init`, `resurrect doctor`, `resurrect run`, and `resurrect inspect-checkpoint`.
+     * Watcher & Subprocess Interceptor: Does `resurrect/watcher.py` or `cli.py run` implement live process wrapping, loop detection (>=3 failures), process killing (SIGTERM/kill), and Databricks remediation injection?
+     * Entire Checkpoint Polling: Does `parser.py` read live refs from `refs/entire/checkpoints/` via Git commands when running an active session?
+     * Privacy Boundary: Confirm prompt scrubbing, token masking, and `[COMPLETE CONTEXT]` vs. `[PARTIAL / REDACTED CONTEXT]` badges operate across all UI entry points.
+
+2. Logging & Diagnostics Check:
+   - Inspect all CLI commands and verify that every step logs clear, user-friendly Rich console output:
+     * When config is missing, does `init` print explicit instructions on which fields to populate in `.resurrect/config.json`?
+     * Does `doctor` handle all network timeouts and edge cases cleanly with helpful remediation steps?
+     * Does `run` log live polling tickers (tokens intercepted, failures detected) and render a distinct Rich Panel when the breaker trips?
+
+3. Test Coverage:
+   - Run `pytest -q` to confirm the status of existing tests.
+   - Summarize what is fully implemented, what is partially implemented, and what remains to be built for the live `resurrect run` demo.
+
+---
+
+Implement the missing live loop-breaker watcher and CLI runner commands:
+
+1. Create `resurrect/watcher.py`:
+   - Implement `watch_agent(command: list[str], max_failures: int = 3, poll_interval: float = 2.0)`:
+     - Launch the command as a subprocess using `subprocess.Popen(..., stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)`.
+     - Live-stream and print the child output so the user sees agent progress.
+     - Periodically poll active checkpoint telemetry:
+       * First attempt: resolve latest git ref via `git for-each-ref --sort=-committerdate --format="%(refname)" refs/entire/checkpoints/` and read `0/full.jsonl` using `git show <ref>:0/full.jsonl`.
+       * Fallback: check local `.entire/` directory or recent checkpoint files.
+     - Parse telemetry through `resurrect.parser.parse_telemetry`:
+       * Extract consecutive failures, tokens burned, and sanitized error signatures (maintaining Track 1 privacy scrubbing).
+     - When consecutive failures >= max_failures:
+       * Terminate and kill the child process (SIGTERM, then kill if alive).
+       * Query Databricks for the proven fix via `DatabricksClient.fetch_resolution()`.
+       * Generate `.resurrect/handoff_manifest.json` with context status badges.
+       * Render the rich breaker trip panel and exit cleanly.
+
+2. In `resurrect/ui/console.py`:
+   - Add a Rich panel for the tripped breaker:
+     * Red bold border: "🚨 [CIRCUIT BREAKER TRIPPED]: Infinite Repair Loop Detected!"
+     * Display: Tokens intercepted, estimated dollars saved, sanitized signature.
+     * Render Context Badge: [COMPLETE CONTEXT] or [PARTIAL / REDACTED CONTEXT].
+     * Green panel: Databricks lakehouse resolution and source commit.
+
+3. In `resurrect/cli.py`:
+   - Add command `resurrect run <command_str>`:
+     - Example: `resurrect run "pytest tests/test_redis_worker.py"` or `resurrect run "codex 'fix tests'"`
+     - Calls `watcher.watch_agent()` with live terminal reporting.
+   - Add command `resurrect inspect-checkpoint`:
+     - Reads and prints telemetry metadata, token count, and privacy status from the most recent checkpoint.
+   - Improve `resurrect init` output: clearly print that `.resurrect/config.json` was created and list the required Databricks keys.
+
+4. Version and Tests:
+   - Bump version to `0.1.2` in `pyproject.toml` and `resurrect/__init__.py`.
+   - Add tests in `tests/test_watcher.py` verifying subprocess termination and handoff file creation when a mock command fails 3 times.
+
+Run `pytest -q` to ensure all tests pass.
+
+---
+
+update the readme of SDK as this :
+
+---
+
+Comprehensive README.md for PyPI / SDK Page
+Replace your README.md (in C:\BTW_CODEX_101\btw_codex\README.md) with this content:
+
+Markdown
+# Agent Resurrect (`agent-resurrect-btw`)
+
+[![PyPI](https://img.shields.io/pypi/v/agent-resurrect-btw.svg)](https://pypi.org/project/agent-resurrect-btw/)
+[![Track](https://img.shields.io/badge/BTW%202026-Track%201%20Privacy%20Boundary-blue.svg)](https://bengaluru-tech-week.com)
+
+**Agent Resurrect** is an autonomous telemetry and circuit-breaking engine for AI coding agents (Claude Code, Codex, Gemini CLI). It prevents infinite repair "doom-loops", safeguards API budgets, and retrieves team-wide resolutions stored in Databricks Delta Lake.
+
+---
+
+##  Quick Start
+
+### 1. Installation
+Install the SDK from PyPI:
+```bash
+pip install --upgrade agent-resurrect-btw
+2. Initialize in Your Repository
+Run in your project root:
+
+Bash
+resurrect init
+This enables Entire checkpoint tracking and creates a starter configuration file at:
+
+Plaintext
+.resurrect/config.json
+3. Configure Databricks Credentials
+Open .resurrect/config.json and fill in your connection details:
+
+JSON
+{
+  "databricks_host": "https://<your-workspace>.cloud.databricks.com",
+  "databricks_token": "dapi...",
+  "databricks_warehouse_id": "<your-16-char-warehouse-id>",
+  "delta_table_name": "dev_failure_traps"
+}
+Alternative (Environment Variables):
+You can also supply credentials via your environment without editing files:
+
+Bash
+export DATABRICKS_HOST="https://<your-workspace>.cloud.databricks.com"
+export DATABRICKS_TOKEN="dapi..."
+export DATABRICKS_WAREHOUSE_ID="<your-warehouse-id>"
+export DELTA_TABLE_NAME="dev_failure_traps"
+4. Run Pre-Flight Diagnostics
+Validate connectivity to Git, Entire CLI, and Databricks SQL Serverless:
+
+Bash
+resurrect doctor
+For deep-dive logs and command traces, append --verbose:
+
+Bash
+resurrect doctor --verbose
+🚀 Usage
+Live Agent Execution & Circuit Breaking
+Execute your coding agent or test suite wrapped in the Resurrect telemetry harness:
+
+Bash
+resurrect run "pytest test_redis_worker.py"
+Or with an interactive agent:
+
+Bash
+resurrect run "codex 'fix the failing cluster connection in worker.py'"
+How It Works:
+
+Live Subprocess Supervision: Resurrect streams agent output live in the terminal.
+
+Loop Detection: Evaluates consecutive failure signatures from Entire Git checkpoints (refs/entire/checkpoints/).
+
+Emergency Circuit Breaker: When failure counts reach 3, execution halts immediately to prevent token and credit burn.
+
+Lakehouse Remediation: Fetches proven fixes from Databricks Delta Lake (dev_failure_traps).
+
+Handoff Manifest: Generates .resurrect/handoff_manifest.json with token counts, cost saved estimates, and context badges.
+
+Inspect Checkpoints & Telemetry
+Inspect the latest session checkpoint, token estimates, and privacy status:
+
+Bash
+resurrect inspect-checkpoint
+🔒 Track 1: Privacy Boundary Compliance
+Agent Resurrect includes a local security and sanitization boundary:
+
+Zero Leakage: Raw prompts, full stack frames, and transcripts are never sent to external services.
+
+Token & Path Scrubbing: Local paths (C:\Users\...) and secrets (dapi..., Bearer...) are scrubbed before SQL query generation.
+
+Explicit Context Transparency: Output is badged as [COMPLETE CONTEXT] or [PARTIAL / REDACTED CONTEXT] so downstream engineers know whether fixes are verified or heuristic.,  continue with this , and update the readme of SDK
+
+---
+
+Fix the Windows subprocess execution crash in `resurrect/watcher.py`:
+
+1. In `watch_agent(command: list[str] | str, ...)`:
+   - If `command` is a list, convert or execute safely across Windows:
+     - Use `shell=True` on Windows (e.g. `shell=(os.name == "nt")`) so `.cmd`, `.bat`, and PATH-resolved executables like `codex` or `pytest` can be found by `CreateProcess`.
+     - Or resolve the binary using `shutil.which(command[0])`. If found, use the resolved path.
+   - Wrap `subprocess.Popen` in a `try/except FileNotFoundError as err:` block:
+     - Instead of an uncaught traceback, return a clean `CommandResult` or `BreakerResult(ok=False)` that prints:
+       f"[bold red]Command not found:[/bold red] {command[0]}. Please verify the tool is installed and available in your PATH."
+   - Ensure the process is properly started with `text=True, encoding="utf-8", errors="replace"`.
+
+2. In `resurrect/cli.py`:
+   - In `run(command_str: str)`:
+     - Use `shlex.split(command_str, posix=(os.name != "nt"))` or pass the raw string directly when `shell=True` on Windows so quoted prompts like "codex 'Fix the issue'" do not get garbled.
+
+3. Bump version to `0.1.3` in `pyproject.toml` and `resurrect/__init__.py`.
+
+Run `pytest -q` to ensure all tests pass.

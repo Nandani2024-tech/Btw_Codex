@@ -1,0 +1,102 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1TZ8SMSMJWNASMQMSKQFGQB",
+  "session_id": "01a075cd-e0f9-7651-b4c7-72586e405b87",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-06T09:02:28.9676732Z",
+  "branch": "feat/resurrect-engine",
+  "checkpoints_count": 3,
+  "save_step_count": 4,
+  "files_touched": [
+    "README.md",
+    "pyproject.toml",
+    "resurrect/__init__.py",
+    "resurrect/cli.py",
+    "resurrect/watcher.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.4-mini",
+  "turn_id": "65d1b3af6d62",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 146061,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1533696,
+    "output_tokens": 14478,
+    "api_call_count": 35
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-06T09:02:28.8157036Z",
+    "agent_lines": 135,
+    "agent_removed": 45,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 135,
+    "total_lines_changed": 180,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 442,
+      "user_lines_removed": 442,
+      "agent_lines_added": 2771,
+      "agent_lines_removed": 2771,
+      "user_added_per_file": {
+        ".claude/scripts/remote-setup.sh": 51,
+        ".claude/skills/test-repo/test-harness.sh": 212,
+        ".cursor/install.sh": 88,
+        ".gemini/test-hooks.sh": 91
+      },
+      "user_removed_per_file": {
+        ".claude/scripts/remote-setup.sh": 51,
+        ".claude/skills/test-repo/test-harness.sh": 212,
+        ".cursor/install.sh": 88,
+        ".gemini/test-hooks.sh": 91
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 442,
+      "user_lines_removed": 442,
+      "agent_lines_added": 2771,
+      "agent_lines_removed": 2771,
+      "user_added_per_file": {
+        ".claude/scripts/remote-setup.sh": 51,
+        ".claude/skills/test-repo/test-harness.sh": 212,
+        ".cursor/install.sh": 88,
+        ".gemini/test-hooks.sh": 91
+      },
+      "user_removed_per_file": {
+        ".claude/scripts/remote-setup.sh": 51,
+        ".claude/skills/test-repo/test-harness.sh": 212,
+        ".cursor/install.sh": 88,
+        ".gemini/test-hooks.sh": 91
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 442,
+      "user_lines_removed": 442,
+      "agent_lines_added": 2858,
+      "agent_lines_removed": 2806,
+      "user_added_per_file": {
+        ".claude/scripts/remote-setup.sh": 51,
+        ".claude/skills/test-repo/test-harness.sh": 212,
+        ".cursor/install.sh": 88,
+        ".gemini/test-hooks.sh": 91
+      },
+      "user_removed_per_file": {
+        ".claude/scripts/remote-setup.sh": 51,
+        ".claude/skills/test-repo/test-harness.sh": 212,
+        ".cursor/install.sh": 88,
+        ".gemini/test-hooks.sh": 91
+      }
+    }
+  ]
+}

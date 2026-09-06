@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1TZ8SMSMJWNASMQMSKQFGQB",
+  "strategy": "manual-commit",
+  "branch": "feat/resurrect-engine",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "README.md",
+    "pyproject.toml",
+    "resurrect/__init__.py",
+    "resurrect/cli.py",
+    "resurrect/watcher.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 146061,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1533696,
+    "output_tokens": 14478,
+    "api_call_count": 35
+  }
+}
