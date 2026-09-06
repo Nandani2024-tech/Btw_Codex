@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1TSNYZ32EE9NNNK83EQSDNM",
+  "strategy": "manual-commit",
+  "branch": "feat/resurrect-engine",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "resurrect/cli.py",
+    "resurrect/core/databricks_client.py",
+    "resurrect/handoff.py",
+    "resurrect/parser.py",
+    "resurrect/ui/console.py",
+    "tests/fixtures/redacted_checkpoint.jsonl",
+    "tests/test_privacy_boundary.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 50992,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 498944,
+    "output_tokens": 7937,
+    "api_call_count": 21
+  }
+}

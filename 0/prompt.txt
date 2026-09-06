@@ -1,0 +1,37 @@
+Reconstruct context from our pre-curveball checkpoint and implement the Track 1 Privacy Boundary constraint:
+
+Invalidated Assumption:
+Previously, we assumed the telemetry parser could send extracted error signatures and context directly to Databricks, and that checkpoint transcripts were always complete and unredacted. The security boundary prohibits sending raw prompts, transcripts, or unredacted traces to external services, and requires graceful handling of redacted/incomplete checkpoints.
+
+Required Implementation:
+
+1. In `resurrect/parser.py`:
+   - Create a telemetry parser that inspects `refs/entire/checkpoints/` git-refs (falling back to fixture/local jsonl).
+   - Add local privacy sanitization / token scrubbing BEFORE any network boundary:
+     - Strip file system paths, credentials, and raw prompt transcripts.
+     - Extract ONLY the sanitized high-level exception class (e.g. `ConnectionError: Cluster down`).
+   - Handle REDACTED or MISSING checkpoint data:
+     - Detect if transcripts contain redaction markers (e.g. `[REDACTED]`, `***`, or missing tool output fields).
+     - Return a structured status flag: `ContextStatus(is_complete=False, confidence="partial", missing_fields=[...])`.
+     - Never crash on missing or truncated event lines.
+
+2. In `resurrect/core/databricks_client.py`:
+   - Enforce Privacy Boundary: assert that raw prompts and full stack traces are NEVER passed into SQL queries or payloads.
+   - Only parameterized sanitized error signatures and module names may be queried against Delta Lake `dev_failure_traps`.
+   - If context is marked partial/redacted, query Databricks with a broader fallback match and flag the result as heuristic/partial.
+
+3. In `resurrect/ui/console.py` & `resurrect/handoff.py`:
+   - Clearly distinguish in the Rich UI between:
+     - [COMPLETE CONTEXT] (Full checkpoint available, verified match)
+     - [PARTIAL / REDACTED CONTEXT] (Sanitized or missing telemetry, unverified heuristic resolution)
+   - Include the privacy provenance and confidence level in `handoff_manifest.json`.
+
+4. In `tests/test_privacy_boundary.py`:
+   - Write a test using a redacted checkpoint fixture (missing prompt, redacted stderr with tokens `[REDACTED]`).
+   - Assert that:
+     1. The parser does not crash.
+     2. Context status is explicitly marked `is_complete=False`.
+     3. No raw/redacted prompt leaks into the Databricks query payload.
+     4. The UI / handoff clearly labels the result as partial.
+
+Run pytest -q to verify all tests pass.
