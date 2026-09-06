@@ -33,12 +33,28 @@ def _looks_redacted(text: str) -> bool:
     return any(marker in text for marker in REDACTION_MARKERS)
 
 
+def sanitize_error_signature(raw_trace: str) -> str:
+    if not raw_trace:
+        return ""
+
+    text = re.sub(r"(?i)\b[A-Z]:\\[^\s\n\r\t]+", "<path>", raw_trace)
+    text = re.sub(r"(?i)(?:/[^ \n\r\t]+)+", "<path>", text)
+    text = re.sub(r"\bdapi[a-zA-Z0-9]+\b", "<token>", text)
+    text = re.sub(r"(?i)Bearer\s+[a-zA-Z0-9._-]+", "Bearer <token>", text)
+
+    match = re.search(r"([A-Z]\w*(?:Error|Exception)[^\n]*)", text)
+    if match:
+        return match.group(1).strip()
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
 def _sanitize_text(text: str) -> str:
-    text = re.sub(r"(?i)\b[A-Z]:\\[^ \n\r\t]+|/[^ \n\r\t]+", "<path>", text)
     text = re.sub(r"(?i)\b(token|password|secret|api[_-]?key)\s*[:=]\s*[^ \n\r\t]+", r"\1=<redacted>", text)
     text = re.sub(r"(?i)\b[0-9a-f]{16,}\b", "<token>", text)
     text = re.sub(r"`[^`]+`", "<redacted>", text)
-    return text.strip()
+    return sanitize_error_signature(text).strip()
 
 
 def _extract_exception_signature(text: str) -> str:

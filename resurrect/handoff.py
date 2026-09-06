@@ -45,3 +45,13 @@ def build_handoff_manifest(telemetry: ParsedTelemetry, verified_match: bool) -> 
 def write_handoff_manifest(path: Path, telemetry: ParsedTelemetry, verified_match: bool) -> Path:
     path.write_text(build_handoff_manifest(telemetry, verified_match).to_json(), encoding="utf-8")
     return path
+
+
+def generate_handoff_manifest(session_data: dict, remediation: dict, filepath: str = "handoff_manifest.json") -> str:
+    payload = {
+        "session_data": session_data,
+        "remediation": remediation,
+    }
+    path = Path(filepath)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return str(path)

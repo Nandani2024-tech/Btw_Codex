@@ -39,6 +39,13 @@ class DatabricksClient:
             payload["parameters"] = parameters
         return self.session.post(url, json=payload, headers=self._headers(), timeout=15)
 
+    def _offline_resolution(self, error_signature: str, module_name: str | None = None) -> dict:
+        return {
+            "resolution": f"Offline fallback for {module_name or 'unknown module'}: no network response available.",
+            "commit": None,
+            "confidence": "heuristic",
+        }
+
     def ping_connection(self) -> DiagnosticResult:
         if not self.host:
             return DiagnosticResult(ok=False, error="Missing DATABRICKS_HOST.")
@@ -98,3 +105,47 @@ class DatabricksClient:
             return DiagnosticResult(ok=False, error=str(exc))
         suffix = "heuristic/partial" if not telemetry.status.is_complete else "verified"
         return DiagnosticResult(ok=True, error=suffix)
+
+    def fetch_resolution(self, error_signature: str, module_name: str | None = None) -> dict:
+        if not error_signature:
+            return self._offline_resolution(error_signature, module_name)
+        if not self.host or not self.token or not self.warehouse_id:
+            return self._offline_resolution(error_signature, module_name)
+
+        statement = (
+            "SELECT resolution, commit, confidence "
+            "FROM dev_failure_traps "
+            "WHERE error_signature = :error_signature"
+        )
+        parameters: list[dict[str, Any]] = [{"name": "error_signature", "value": error_signature}]
+        if module_name:
+            statement += " AND module_name = :module_name"
+            parameters.append({"name": "module_name", "value": module_name})
+        statement += " ORDER BY confidence DESC LIMIT 1"
+
+        try:
+            response = self._post_statement(statement, parameters=parameters)
+            response.raise_for_status()
+            payload = response.json() if hasattr(response, "json") else {}
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
+            return self._offline_resolution(error_signature, module_name)
+
+        data = payload.get("result", {}).get("data_array") if isinstance(payload, dict) else None
+        if not data:
+            return self._offline_resolution(error_signature, module_name)
+
+        first = data[0]
+        if isinstance(first, dict):
+            resolution = first.get("resolution")
+            commit = first.get("commit")
+            confidence = first.get("confidence") or "verified"
+        else:
+            resolution = first[0] if len(first) > 0 else None
+            commit = first[1] if len(first) > 1 else None
+            confidence = first[2] if len(first) > 2 else "verified"
+
+        return {
+            "resolution": resolution or self._offline_resolution(error_signature, module_name)["resolution"],
+            "commit": commit,
+            "confidence": confidence or "verified",
+        }

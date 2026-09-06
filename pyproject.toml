@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-resurrect"
-version = "0.1.0"
+name = "agent-resurrect-btw"
+version = "0.1.1"
 description = "Agent Resurrect SDK"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,4 +22,3 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["resurrect*"]
-
