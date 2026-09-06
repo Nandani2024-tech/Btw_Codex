@@ -1,0 +1,40 @@
+Set up the foundational repository scaffolding, configuration files, and package structure for the Agent Resurrect SDK:
+
+1. Create a root `.gitignore` ignoring:
+   - __pycache__/, *.py[cod], *$py.class
+   - *.egg-info/, build/, dist/
+   - .env, .resurrect/
+   - .pytest_cache/, .coverage
+
+2. Create `.env.example` with the placeholders:
+   DATABRICKS_HOST=https://dbc-xxxxxx.cloud.databricks.com
+   DATABRICKS_TOKEN=dapi...
+   DATABRICKS_WAREHOUSE_ID=xxxxxxxxx
+   DELTA_TABLE_NAME=dev_failure_traps
+
+3. Create `pyproject.toml` configured for setuptools / standard build:
+   - Package name: "agent-resurrect"
+   - Version: "0.1.0"
+   - Dependencies: typer>=0.9.0, rich>=13.0.0, requests>=2.31.0
+   - Script entry point: map `resurrect` to `resurrect.cli:app`
+
+4. Create the directory tree and stubbed __init__.py files:
+   - resurrect/
+      __init__.py (export __version__ = "0.1.0")
+      cli.py (minimal Typer app stub)
+      config.py (empty placeholder)
+      core/
+         __init__.py
+         entire_bridge.py (empty placeholder)
+         databricks_client.py (empty placeholder)
+      ui/
+          __init__.py
+          console.py (empty placeholder)
+   - tests/
+      __init__.py
+      test_config.py (empty placeholder)
+      test_connectivity.py (empty placeholder)
+
+5. Create a clean root `README.md` introducing Agent Resurrect as a real-time loop-breaker and telemetry co-pilot, documenting the SDK structure, planned CLI commands (resurrect init, doctor, run), and environment variables.
+
+Verify the files are created with clean syntax. Do not write full business logic yet.
