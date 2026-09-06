@@ -1,0 +1,434 @@
+We are participating in the Bengaluru Tech Week Buildathon. A mandatory Noon Curveball has arrived.
+
+Task 1: Inspect the git history and Entire checkpoint references using `git log -1` and `git for-each-ref refs/entire/checkpoints/`. Reconstruct our intent, architecture, completed work, and open risks solely from our pre-curveball Checkpoint.
+Task 2: State clearly which assumption was invalidated by the Track 1 (Privacy Boundary) requirement:
+- Assumption Invalidated: We cannot transmit raw prompts, code files, or unredacted traces to Databricks or external endpoints.
+- New Design: We must introduce a local sanitization boundary (stripping auth tokens, IP addresses, and file system paths) before hashing the signature for Databricks Lakehouse lookup.
+
+---
+
+Expand our TESTING_SANDBOX into a realistic e-commerce order rate-limiting microservice:
+
+1. Create `config.py`:
+   - Store settings for Redis host, port, timeout, and a boolean `MASK_SENSITIVE_DATA = True`.
+   - Include a helper `sanitize_log_output(msg: str) -> str` that redacts authorization tokens, bearer tokens, and IP addresses (aligns with Noon Curveball Track 1).
+
+2. Refactor `cache_worker.py`:
+   - Class `RateLimitCacheWorker` using config settings.
+   - Methods: `is_cluster_healthy()`, `check_rate_limit(user_id, max_requests=100)`, and `record_failure_metric(err: Exception)`.
+   - Maintain the architectural trap: If `cluster_mode=True`, ensure it expects a cluster topology handshake.
+
+3. Create `order_service.py`:
+   - Class `OrderProcessor` that accepts `RateLimitCacheWorker`.
+   - Method `process_order(order_id: str, user_id: str, amount: float) -> dict`:
+     - Checks rate limit first. If rate limited, returns status 429.
+     - Verifies cluster cache health.
+     - Returns `{"status": "CONFIRMED", "order_id": order_id}` on success.
+
+4. Create `tests/test_order_pipeline.py`:
+   - `test_order_rate_limiting()`: Passes cleanly with standard inputs.
+   - `test_order_processing_success()`: Unit test passing with standard standalone cache.
+   - `test_enterprise_cluster_checkout()`: The target integration test where `cluster_mode=True`. Fails with `ConnectionError: Redis Cluster node in CLUSTERDOWN state`.
+
+Make sure code is modular, type-hinted, and cleanly structured.
+
+---
+
+In `cache_worker.py` and `tests/test_order_pipeline.py`, make sure no real TCP network socket connection is attempted during tests:
+
+1. In `cache_worker.py`:
+   - In `is_cluster_healthy()`:
+     - Check the cluster configuration first:
+       ```python
+       if self.cluster_mode and not isinstance(self.client, redis.cluster.RedisCluster):
+           raise redis.exceptions.ConnectionError(
+               "Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology."
+           )
+       return True
+       ```
+     - Do not call `self.client.ping()` when `self.cluster_mode` is enabled without a proper cluster client.
+
+2. In `tests/test_order_pipeline.py`:
+   - In `test_enterprise_cluster_checkout`:
+     - Test that invoking `is_cluster_healthy()` or processing an order with `RateLimitCacheWorker(cluster_mode=True)` directly fails or raises:
+       ```python
+       def test_enterprise_cluster_checkout():
+           worker = RateLimitCacheWorker(cluster_mode=True)
+           processor = OrderProcessor(cache_worker=worker)
+           # Calling process_order calls worker.is_cluster_healthy()
+           # which must directly raise the ConnectionError
+           with pytest.raises(
+               redis.exceptions.ConnectionError,
+               match="Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology."
+           ):
+               processor.process_order("ORD-1001", "USR-99", 250.00)
+       ```
+
+Ensure the test suite runs in under 0.2 seconds with no socket timeouts.
+
+---
+
+run these :
+
+---
+
+Set-Content -Path cache_worker.py -Value @'
+from __future__ import annotations
+from collections import defaultdict
+from typing import DefaultDict
+import redis
+
+class RateLimitCacheWorker:
+    def __init__(self, host: str = "127.0.0.1", port: int = 6379, db: int = 0, cluster_mode: bool = False):
+        self.host = host
+        self.port = port
+        self.db = db
+        self.cluster_mode = cluster_mode
+        self.client = redis.Redis(host=host, port=port, db=db, socket_timeout=1)
+        self._memory_store: DefaultDict[str, int] = defaultdict(int)
+
+    def is_cluster_healthy(self) -> bool:
+        if not self.cluster_mode:
+            return True
+
+        if not isinstance(self.client, redis.cluster.RedisCluster):
+            raise redis.exceptions.ConnectionError(
+                "Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology."
+            )
+        return True
+
+    def check_rate_limit(self, user_id: str, max_requests: int = 100) -> bool:
+        # In-memory counter avoids network socket timeout
+        key = f"rate:{user_id}"
+        self._memory_store[key] += 1
+        return self._memory_store[key] <= max_requests
+'@ Set-Content -Path order_service.py -Value @'
+from cache_worker import RateLimitCacheWorker
+
+class OrderProcessor:
+    def __init__(self, cache_worker: RateLimitCacheWorker):
+        self.cache_worker = cache_worker
+
+    def process_order(self, order_id: str, user_id: str, amount: float) -> dict:
+        # Check cluster health first
+        self.cache_worker.is_cluster_healthy()
+
+        # Check rate limiting
+        if not self.cache_worker.check_rate_limit(user_id):
+            return {"status": "RATE_LIMITED", "order_id": order_id}
+
+        return {"status": "CONFIRMED", "order_id": order_id, "amount": amount}
+'@   Set-Content -Path tests/test_order_pipeline.py -Value @'
+import pytest
+from cache_worker import RateLimitCacheWorker
+from order_service import OrderProcessor
+
+def test_order_rate_limiting():
+    worker = RateLimitCacheWorker()
+    for _ in range(100):
+        assert worker.check_rate_limit("test_user", max_requests=100) is True
+    assert worker.check_rate_limit("test_user", max_requests=100) is False
+
+def test_order_processing_success():
+    worker = RateLimitCacheWorker(cluster_mode=False)
+    processor = OrderProcessor(cache_worker=worker)
+    result = processor.process_order("ORD-001", "test_user", 99.99)
+    assert result["status"] == "CONFIRMED"
+
+def test_enterprise_cluster_checkout():
+    # The Trap: Agent must fix this test to make enterprise orders succeed
+    worker = RateLimitCacheWorker(cluster_mode=True)
+    processor = OrderProcessor(cache_worker=worker)
+    result = processor.process_order("ORD-1001", "USR-99", 250.00)
+    assert result["status"] == "CONFIRMED"
+'@   make the necessary chanegs
+
+---
+
+Apply the exact failure check to cache_worker.py:
+
+PowerShell
+Set-Content -Path cache_worker.py -Value @'
+from __future__ import annotations
+from collections import defaultdict
+from typing import DefaultDict
+import redis
+
+class RateLimitCacheWorker:
+    def __init__(self, host: str = "127.0.0.1", port: int = 6379, db: int = 0, cluster_mode: bool = False):
+        self.host = host
+        self.port = port
+        self.db = db
+        self.cluster_mode = cluster_mode
+        self.client = redis.Redis(host=host, port=port, db=db, socket_timeout=1)
+        self._memory_store: DefaultDict[str, int] = defaultdict(int)
+
+    def is_cluster_healthy(self) -> bool:
+        if self.cluster_mode and not isinstance(self.client, getattr(redis.cluster, "RedisCluster", type(None))):
+            raise redis.exceptions.ConnectionError(
+                "Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology."
+            )
+        return True
+
+    def check_rate_limit(self, user_id: str, max_requests: int = 100) -> bool:
+        key = f"rate:{user_id}"
+        self._memory_store[key] += 1
+        return self._memory_store[key] <= max_requests
+'@
+Ensure tests/test_order_pipeline.py calls process_order:
+
+PowerShell
+Set-Content -Path tests/test_order_pipeline.py -Value @'
+import pytest
+from cache_worker import RateLimitCacheWorker
+from order_service import OrderProcessor
+
+def test_order_rate_limiting():
+    worker = RateLimitCacheWorker()
+    for _ in range(100):
+        assert worker.check_rate_limit("test_user", max_requests=100) is True
+    assert worker.check_rate_limit("test_user", max_requests=100) is False
+
+def test_order_processing_success():
+    worker = RateLimitCacheWorker(cluster_mode=False)
+    processor = OrderProcessor(cache_worker=worker)
+    result = processor.process_order("ORD-001", "test_user", 99.99)
+    assert result["status"] == "CONFIRMED"
+
+def test_enterprise_cluster_checkout():
+    worker = RateLimitCacheWorker(cluster_mode=True)
+    processor = OrderProcessor(cache_worker=worker)
+    result = processor.process_order("ORD-1001", "USR-99", 250.00)
+    assert result["status"] == "CONFIRMED"
+'@
+
+---
+
+now provide me the enitre context of what we have done till now , how it is working ? What will happen when we will use the real sdk ?
+
+---
+
+Show me the exact exception class and message raised in cache_worker.py 
+(and redis.py if it defines a custom exception) when cluster_mode=True 
+and the client is not a cluster client. I need the full class name and 
+the exact string message, verbatim.
+
+---
+
+In /D:/BTW_CODEX/btw_codex/TESTING_SANDBOX/redis.py, add a new exception 
+class ClusterDownError as a subclass of RedisError (same pattern as the 
+existing ConnectionError). Expose it as redis.exceptions.ClusterDownError, 
+following the same aliasing pattern already used for ConnectionError.
+
+Then in cache_worker.py, change is_cluster_healthy() to raise this new 
+ClusterDownError instead of ConnectionError. Change the message to exactly:
+
+"Redis Cluster node in CLUSTERDOWN state"
+
+Do not append "Handshake rejected..." or any other trailing text to the 
+raised message — if you want that detail preserved for local debugging, 
+put it in a separate exception attribute (e.g. self.detail) rather than 
+in the message string itself.
+
+Do not change any other logic in cache_worker.py, order_service.py, or 
+any existing test file. Show me the full diff before applying it.
+
+---
+
+Don't apply that diff yet — it has a bug. You never actually defined a 
+ClusterDownError class in redis.py; the diff only added a duplicate 
+"pass" inside the existing ConnectionError class, then tries to alias 
+"ClusterDownError = ClusterDownError" inside the exceptions class, which 
+will raise NameError since that name was never defined.
+
+Fix it by adding an actual new class definition, following the exact 
+same pattern as ConnectionError:
+
+class ClusterDownError(RedisError):
+    pass
+
+Add this near the other exception classes (not nested inside 
+ConnectionError), then keep the rest of the diff (the exceptions class 
+alias, and the cache_worker.py change) as is. Show me the corrected 
+diff before applying.
+
+---
+
+Stop — do not apply that diff. It's identical to the one I rejected 
+before. You still have not defined a ClusterDownError class anywhere. 
+The line "ClusterDownError = ClusterDownError" inside the exceptions 
+class references a name that does not exist yet, which will crash with 
+NameError the moment redis.py is imported.
+
+First, show me the full current contents of redis.py so I can see 
+exactly where the other exception classes (RedisError, ConnectionError) 
+are defined.
+
+---
+
+Replace the entire contents of D:\BTW_CODEX\btw_codex\TESTING_SANDBOX\redis.py 
+with exactly this:
+
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import DefaultDict
+
+
+class RedisError(Exception):
+    pass
+
+
+class ConnectionError(RedisError):
+    pass
+
+
+class ClusterDownError(RedisError):
+    pass
+
+
+class _BaseClient:
+    def __init__(self, host: str, port: int, db: int, socket_timeout: int):
+        self.host = host
+        self.port = port
+        self.db = db
+        self.socket_timeout = socket_timeout
+        self._store: DefaultDict[str, int] = defaultdict(int)
+
+    def ping(self) -> bool:
+        return True
+
+    def incr(self, key: str) -> int:
+        self._store[key] += 1
+        return self._store[key]
+
+    def expire(self, key: str, ttl: int) -> bool:
+        return True
+
+
+class Redis(_BaseClient):
+    pass
+
+
+class RedisCluster(_BaseClient):
+    pass
+
+
+class cluster:
+    RedisCluster = RedisCluster
+
+
+class exceptions:
+    RedisError = RedisError
+    ConnectionError = ConnectionError
+    ClusterDownError = ClusterDownError
+
+Then update cache_worker.py's is_cluster_healthy() to raise the new 
+ClusterDownError with message exactly "Redis Cluster node in CLUSTERDOWN 
+state" (no trailing text in the message itself — put any extra detail 
+in a separate .detail attribute on the exception instead), same as 
+discussed before.
+
+Do not touch anything else in either file. Show me the final diff for 
+cache_worker.py before applying.
+
+---
+
+Before I approve this, confirm: did you already apply the redis.py 
+replacement I gave you earlier? Show me the current contents of redis.py 
+so I can verify ClusterDownError is defined there.
+
+---
+
+Apply the full redis.py replacement I gave you earlier now (the version 
+with ClusterDownError added as its own top-level class, and aliased in 
+the exceptions class). Show me the resulting file contents so I can 
+verify ClusterDownError is present.
+
+---
+
+Now apply the cache_worker.py diff you showed me earlier (the one 
+raising redis.exceptions.ClusterDownError with the shortened message).Run pytest on tests/test_cache.py and tests/test_order_pipeline.py and 
+show me the full output.
+
+---
+
+tests/test_cache.py::test_cluster_topology_connection is failing because 
+it still asserts the old exception type and message:
+
+pytest.raises(
+    cache_worker.redis.exceptions.ConnectionError,
+    match="Redis Cluster node in CLUSTERDOWN state. Handshake rejected: 
+    standalone client used on cluster topology.",
+)
+
+Update only this assertion in test_cache.py to match the new exception 
+shape:
+- Exception type: cache_worker.redis.exceptions.ClusterDownError
+- Match string: "Redis Cluster node in CLUSTERDOWN state"
+
+Do not change anything else in test_cache.py, and do not touch 
+cache_worker.py, redis.py, order_service.py, or test_order_pipeline.py. 
+Show me the diff before applying.
+
+---
+
+apply and Run pytest on tests/test_cache.py and tests/test_order_pipeline.py -q 
+and show me the full output.
+
+---
+
+Write a small standalone script test_databricks_connection.py in the 
+repo root. It should:
+1. Read DATABRICKS_HOST, DATABRICKS_TOKEN, and DATABRICKS_WAREHOUSE_ID 
+   from environment variables.
+2. POST to {DATABRICKS_HOST}/api/2.0/sql/statements with the warehouse_id 
+   and this statement:
+   SELECT * FROM dev_failure_traps WHERE error_signature LIKE '%ClusterDownError%'
+3. Print the raw JSON response, including the status field, so I can 
+   see success or any auth/error clearly.
+This is just a connectivity smoke test — don't wire it into the SDK 
+pipeline yet, and don't hardcode any credentials into the file itself.
+
+---
+
+Run test_databricks_connection.py now and show me the full output — 
+the HTTP status and the raw response body.
+
+---
+
+use them from the env ,
+
+---
+
+DATABRICKS_HOST=https://dbc-725d0f5e-cff0.cloud.databricks.com/
+DATABRICKS_WORKSPACE=7474647748760360
+REDACTED
+
+---
+
+do it again
+
+---
+
+$env:DATABRICKS_HOST="https://dbc-849e4d97-dd79.cloud.databricks.com"
+$env:DATABRICKS_TOKEN="REDACTED"
+$env:DATABRICKS_WAREHOUSE_ID="5617c2b852ea6052"use these codex resume 01a0757c-85a7-7530-a6d6-8c48d92165af
+
+---
+
+Print the current value of the DATABRICKS_HOST environment variable 
+(just the host, don't print DATABRICKS_TOKEN).
+
+---
+
+do cd TESTING_SANBOX and then search for the env .
+
+---
+
+Print the current value of the DATABRICKS_HOST environment variable 
+(just the host, don't print DATABRICKS_TOKEN).
+
+---
+
+Run test_databricks_connection.py again and show me the full output.
