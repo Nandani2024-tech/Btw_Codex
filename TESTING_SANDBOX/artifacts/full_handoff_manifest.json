@@ -1,0 +1,11 @@
+{
+  "source_module": "cache_worker",
+  "error_signature": "redis.exceptions.ClusterDownError: Redis Cluster node in CLUSTERDOWN state",
+  "is_complete": true,
+  "missing_fields": [],
+  "context_label": "complete",
+  "query_mode": "exact",
+  "status_label": "verified",
+  "confidence": "verified",
+  "privacy_boundary": "sanitized-signature-only"
+}
