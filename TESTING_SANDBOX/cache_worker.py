@@ -15,9 +15,9 @@ class RateLimitCacheWorker:
 
     def is_cluster_healthy(self) -> bool:
         if self.cluster_mode and not isinstance(self.client, getattr(redis.cluster, "RedisCluster", type(None))):
-            raise redis.exceptions.ConnectionError(
-                "Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology."
-            )
+            err = redis.exceptions.ClusterDownError("Redis Cluster node in CLUSTERDOWN state")
+            err.detail = "Handshake rejected: standalone client used on cluster topology."
+            raise err
         return True
 
     def check_rate_limit(self, user_id: str, max_requests: int = 100) -> bool:

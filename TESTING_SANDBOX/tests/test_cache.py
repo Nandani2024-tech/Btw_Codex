@@ -19,7 +19,7 @@ def test_rate_limit_counter():
 def test_cluster_topology_connection():
     worker = RateLimitCacheWorker(cluster_mode=True)
     with pytest.raises(
-        cache_worker.redis.exceptions.ConnectionError,
-        match="Redis Cluster node in CLUSTERDOWN state. Handshake rejected: standalone client used on cluster topology.",
+        cache_worker.redis.exceptions.ClusterDownError,
+        match="Redis Cluster node in CLUSTERDOWN state",
     ):
         worker.is_cluster_healthy()

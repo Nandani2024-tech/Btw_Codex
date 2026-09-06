@@ -12,6 +12,10 @@ class ConnectionError(RedisError):
     pass
 
 
+class ClusterDownError(RedisError):
+    pass
+
+
 class _BaseClient:
     def __init__(self, host: str, port: int, db: int, socket_timeout: int):
         self.host = host
@@ -46,3 +50,4 @@ class cluster:
 class exceptions:
     RedisError = RedisError
     ConnectionError = ConnectionError
+    ClusterDownError = ClusterDownError
