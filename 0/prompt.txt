@@ -1,0 +1,26 @@
+Implement the auto-setup and diagnostic commands for the agent-resurrect SDK:
+
+1. In `resurrect/config.py`:
+   - Support loading/saving config from `.resurrect/config.json`.
+   - Fall back to environment variables: DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID, DELTA_TABLE_NAME (default: "dev_failure_traps").
+
+2. In `resurrect/core/entire_bridge.py`:
+   - Create a helper `setup_entire(agent="codex")` that checks if Git is initialized, runs `entire enable --force` and configures the agent hooks via subprocess, returning execution status and output.
+   - Create a helper `check_entire_status()` that runs `entire status` and verifies checkpoints are active.
+
+3. In `resurrect/core/databricks_client.py`:
+   - Implement `DatabricksClient` using `requests`.
+   - Add `ping_connection()`: POSTs a lightweight test query ("SELECT 1") to `${DATABRICKS_HOST}/api/2.0/sql/statements` using bearer auth and warehouse ID. Returns True/False with latency or diagnostic error message.
+   - Add `verify_table_exists(table_name="dev_failure_traps")`: checks if the target table is queryable.
+
+4. In `resurrect/ui/console.py`:
+   - Use Rich tables and panels to render formatted status output (green checks for passing diagnostics, clear warnings for missing config/credentials).
+
+5. In `resurrect/cli.py`:
+   - Implement `resurrect init`: sets up Entire hooks in the current directory and creates a starter `.resurrect/config.json`.
+   - Implement `resurrect doctor`: executes health checks against local Git, Entire CLI/hooks, and the Databricks connection, outputting the Rich status board.
+
+6. In `tests/test_config.py` and `tests/test_connectivity.py`:
+   - Add unit tests with mocks for subprocess executions and Databricks REST API responses.
+
+Verify all files compile, run the tests to confirm they pass, and output the command to test locally.
