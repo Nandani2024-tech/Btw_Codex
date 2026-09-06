@@ -1,0 +1,63 @@
+Implement the auto-setup and diagnostic commands for the agent-resurrect SDK:
+
+1. In `resurrect/config.py`:
+   - Support loading/saving config from `.resurrect/config.json`.
+   - Fall back to environment variables: DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID, DELTA_TABLE_NAME (default: "dev_failure_traps").
+
+2. In `resurrect/core/entire_bridge.py`:
+   - Create a helper `setup_entire(agent="codex")` that checks if Git is initialized, runs `entire enable --force` and configures the agent hooks via subprocess, returning execution status and output.
+   - Create a helper `check_entire_status()` that runs `entire status` and verifies checkpoints are active.
+
+3. In `resurrect/core/databricks_client.py`:
+   - Implement `DatabricksClient` using `requests`.
+   - Add `ping_connection()`: POSTs a lightweight test query ("SELECT 1") to `${DATABRICKS_HOST}/api/2.0/sql/statements` using bearer auth and warehouse ID. Returns True/False with latency or diagnostic error message.
+   - Add `verify_table_exists(table_name="dev_failure_traps")`: checks if the target table is queryable.
+
+4. In `resurrect/ui/console.py`:
+   - Use Rich tables and panels to render formatted status output (green checks for passing diagnostics, clear warnings for missing config/credentials).
+
+5. In `resurrect/cli.py`:
+   - Implement `resurrect init`: sets up Entire hooks in the current directory and creates a starter `.resurrect/config.json`.
+   - Implement `resurrect doctor`: executes health checks against local Git, Entire CLI/hooks, and the Databricks connection, outputting the Rich status board.
+
+6. In `tests/test_config.py` and `tests/test_connectivity.py`:
+   - Add unit tests with mocks for subprocess executions and Databricks REST API responses.
+
+Verify all files compile, run the tests to confirm they pass, and output the command to test locally.
+
+---
+
+Fix the Windows subprocess crashes and enhance debugging in `resurrect/core/entire_bridge.py` and `resurrect/cli.py`:
+
+1. Fix `_run()` in `resurrect/core/entire_bridge.py`:
+   - Set `encoding="utf-8"`, `errors="replace"`, and `text=True` explicitly in `subprocess.run(...)` so Windows cp1252 charmap decoding errors never happen.
+   - Use `stdin=subprocess.DEVNULL` and `timeout=15`.
+   - Safely handle stdout and stderr: do not call `.strip()` directly on potentially None objects. Use:
+     `stdout = (completed.stdout or "").strip()`
+     `stderr = (completed.stderr or "").strip()`
+   - Wrap `subprocess.run` in `try/except (subprocess.TimeoutExpired, FileNotFoundError, Exception)` to capture any OS-level issues cleanly without crashing, returning `CommandResult(ok=False, ...)` with an actionable diagnostic error message.
+
+2. Add rich, user-friendly debugging across `resurrect/cli.py`:
+   - Add an optional `--verbose` / `-v` flag to `resurrect doctor` and `resurrect init`.
+   - When `--verbose` is enabled (or on error), print a collapsible debug panel or log lines showing:
+     - Exact command executed (e.g. `[dim]Running: entire status[/dim]`)
+     - Working directory (`cwd`)
+     - Raw returncode, stdout, and stderr
+   - Ensure the doctor table gracefully renders status items even when Entire is unconfigured or returns an error, rather than throwing an unhandled exception.
+
+3. Update/add tests in `tests/test_connectivity.py` ensuring `_run` safely handles commands returning None or non-ASCII characters.
+
+Verify changes with `pytest -q`.
+
+---
+
+In `resurrect/core/entire_bridge.py`, update `check_entire_status()`:
+
+Change the active detection condition:
+Instead of requiring the exact phrase "checkpoints active", mark Entire as active/OK if:
+`status.returncode == 0 and ("enabled" in text or "checkpoints active" in text)`
+
+Set details to:
+`f"Entire active ({status.stdout.splitlines()[0]})"` if ok else status.stderr or "Entire is not enabled on this repository."
+
+Run `pytest -q` to ensure tests pass.
