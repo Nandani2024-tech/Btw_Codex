@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1V0WRTW0BGRJEQCBVSCA9CA",
+  "strategy": "manual-commit",
+  "branch": "feat/sandbox-telemetry-traps",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "TESTING_SANDBOX/artifacts/full_handoff_manifest.json",
+    "TESTING_SANDBOX/artifacts/redacted_handoff_manifest.json",
+    "TESTING_SANDBOX/fixtures/full_checkpoint.jsonl",
+    "TESTING_SANDBOX/fixtures/redacted_checkpoint.jsonl",
+    "TESTING_SANDBOX/resurrect/__init__.py",
+    "TESTING_SANDBOX/resurrect/cli.py",
+    "TESTING_SANDBOX/resurrect/databricks_client.py",
+    "TESTING_SANDBOX/resurrect/handoff.py",
+    "TESTING_SANDBOX/resurrect/parser.py",
+    "TESTING_SANDBOX/tests/test_privacy_boundary.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 53751,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1069312,
+    "output_tokens": 15299,
+    "api_call_count": 101
+  }
+}
